@@ -72,6 +72,16 @@ dependencies {
     implementation(libs.vico.compose.m3)
     implementation(libs.vico.core)
     
+    // Retrofit & Networking
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.gson)
+    
+    // DataStore
+    implementation(libs.datastore.preferences)
+    
     // Debug
     debugImplementation(libs.compose.ui.tooling)
     

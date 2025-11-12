@@ -1,5 +1,6 @@
 package com.example.moneyflow.screens
 
+import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,16 +27,21 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
@@ -52,12 +59,23 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.moneyflow.components.AppPrimaryButton
 import com.example.moneyflow.theme.InputShape
+import com.example.moneyflow.ui.viewmodel.RegisterState
+import com.example.moneyflow.ui.viewmodel.RegisterViewModel
 
 @Composable
 fun RegisterScreen(navController: NavController) {
+    val context = LocalContext.current
+    val viewModel: RegisterViewModel = viewModel(
+        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
+            context.applicationContext as Application
+        )
+    )
+    val registerState by viewModel.registerState.collectAsState()
+    
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -66,6 +84,21 @@ fun RegisterScreen(navController: NavController) {
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
     var termsAccepted by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Manejar estados de registro
+    LaunchedEffect(registerState) {
+        when (val state = registerState) {
+            is RegisterState.Success -> {
+                snackbarHostState.showSnackbar("Registro exitoso. Por favor inicia sesión.")
+                navController.popBackStack()
+            }
+            is RegisterState.Error -> {
+                snackbarHostState.showSnackbar(state.message)
+            }
+            else -> {}
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -316,13 +349,36 @@ fun RegisterScreen(navController: NavController) {
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+            
+            // Error Message
+            val errorState = registerState as? RegisterState.Error
+            if (errorState != null) {
+                Text(
+                    text = errorState.message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Register Button
-            AppPrimaryButton(
-                text = "Registrarse",
-                onClick = { navController.navigate("dashboard") },
-                enabled = termsAccepted
-            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                AppPrimaryButton(
+                    text = "Registrarse",
+                    onClick = { 
+                        viewModel.register(name, phone, email, password, confirmPassword) 
+                    },
+                    enabled = termsAccepted && registerState !is RegisterState.Loading
+                )
+                if (registerState is RegisterState.Loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
 
             // Login Link
             Row(
@@ -344,5 +400,13 @@ fun RegisterScreen(navController: NavController) {
                 }
             }
         }
+        
+        // Snackbar para mostrar errores
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        )
     }
 }
