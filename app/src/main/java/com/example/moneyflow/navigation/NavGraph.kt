@@ -5,12 +5,15 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.moneyflow.screens.AddCategoryScreen
 import com.example.moneyflow.screens.AddTransactionScreen
 import com.example.moneyflow.screens.CategoriesScreen
 import com.example.moneyflow.screens.DashboardScreen
+import com.example.moneyflow.screens.EditTransactionScreen
 import com.example.moneyflow.screens.LoginScreen
 import com.example.moneyflow.screens.ProfileScreen
 import com.example.moneyflow.screens.RegisterScreen
+import com.example.moneyflow.screens.SettingsScreen
 import com.example.moneyflow.screens.StatisticsScreen
 import com.example.moneyflow.screens.TransactionDetailScreen
 import com.example.moneyflow.screens.TransactionsScreen
@@ -34,6 +37,16 @@ fun NavGraphBuilder.appNavigation(navController: NavController) {
         AddTransactionScreen(navController = navController)
     }
 
+    composable(
+        route = "edit_transaction/{transactionId}",
+        arguments = listOf(
+            navArgument("transactionId") { type = androidx.navigation.NavType.StringType }
+        )
+    ) { backStackEntry ->
+        val transactionId = backStackEntry.arguments?.getString("transactionId")
+        EditTransactionScreen(navController = navController, transactionId = transactionId)
+    }
+
     composable("transactions") {
         TransactionsScreen(navController = navController)
     }
@@ -42,12 +55,29 @@ fun NavGraphBuilder.appNavigation(navController: NavController) {
         CategoriesScreen(navController = navController)
     }
 
+    composable(
+        route = "add_category?categoryId={categoryId}",
+        arguments = listOf(
+            navArgument("categoryId") {
+                nullable = true
+                defaultValue = null
+            }
+        )
+    ) { backStackEntry ->
+        val categoryId = backStackEntry.arguments?.getString("categoryId")
+        AddCategoryScreen(navController = navController, categoryId = categoryId)
+    }
+
     composable("statistics") {
         StatisticsScreen(navController = navController)
     }
 
     composable("profile") {
         ProfileScreen(navController = navController)
+    }
+
+    composable("settings") {
+        SettingsScreen(navController = navController)
     }
 
     composable(

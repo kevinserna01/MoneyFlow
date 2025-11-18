@@ -27,11 +27,20 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _loginState.value = LoginState.Loading
             repository.login(correo, contraseña)
-                .onSuccess { loginResponse ->
-                    // Guardar token y userId en DataStore
-                    tokenManager.saveToken(loginResponse.token)
-                    tokenManager.saveUserId(loginResponse.usuario.id)
-                    _loginState.value = LoginState.Success(loginResponse)
+                    .onSuccess { loginResponse ->
+                        // Guardar token y datos del usuario en DataStore
+                        tokenManager.saveToken(loginResponse.token)
+                        tokenManager.saveUserId(loginResponse.usuario.id)
+                        // Configurar token en ApiClient para futuras peticiones
+                        com.example.moneyflow.data.api.ApiClient.setToken(loginResponse.token)
+                        val fullName = loginResponse.usuario.nombre.trim()
+                        val firstName = fullName
+                            .substringBefore(" ")
+                            .ifBlank { fullName }
+                        tokenManager.saveUserFirstName(firstName)
+                        tokenManager.saveUserFullName(fullName)
+                        tokenManager.saveUserEmail(loginResponse.usuario.correo)
+                        _loginState.value = LoginState.Success(loginResponse)
                 }
                 .onFailure { error ->
                     _loginState.value = LoginState.Error(error.message ?: "Error desconocido")

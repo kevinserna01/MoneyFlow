@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.example.moneyflow.model.Transaction
 import com.example.moneyflow.theme.ExpenseColor
 import com.example.moneyflow.theme.IncomeColor
+import com.example.moneyflow.utils.CurrencyFormatter
 
 @Composable
 fun TransactionCard(
@@ -85,15 +86,14 @@ fun TransactionCard(
             }
             
             // Amount
+            val amountText = CurrencyFormatter.formatCOP(transaction.amount)
+            val prefix = if (transaction.type == com.example.moneyflow.model.TransactionType.INCOME) "+" else "-"
             Text(
-                text = if (transaction.type == com.example.moneyflow.model.TransactionType.INCOME) 
-                    "+$${String.format("%.2f", transaction.amount)}" 
-                else 
-                    "-$${String.format("%.2f", transaction.amount)}",
+                text = "$prefix$amountText",
                 style = MaterialTheme.typography.titleMedium,
-                color = if (transaction.type == com.example.moneyflow.model.TransactionType.INCOME) 
-                    IncomeColor 
-                else 
+                color = if (transaction.type == com.example.moneyflow.model.TransactionType.INCOME)
+                    IncomeColor
+                else
                     ExpenseColor
             )
         }

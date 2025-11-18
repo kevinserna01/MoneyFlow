@@ -38,7 +38,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.app.Application
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,49 +51,104 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.moneyflow.components.TransactionCard
-import com.example.moneyflow.model.Categories
+import com.example.moneyflow.data.models.TransactionResponse
 import com.example.moneyflow.model.Transaction
 import com.example.moneyflow.model.TransactionType
 import com.example.moneyflow.theme.ExpenseColor
 import com.example.moneyflow.theme.IncomeColor
+import com.example.moneyflow.ui.viewmodel.DashboardViewModel
+import com.example.moneyflow.ui.viewmodel.TransactionsViewModel
+import com.example.moneyflow.ui.viewmodel.TransactionsState
+import com.example.moneyflow.utils.CurrencyFormatter
 
 @Composable
 fun DashboardScreen(navController: NavController) {
+    val context = LocalContext.current
+    val dashboardViewModel: DashboardViewModel = viewModel(
+        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
+            context.applicationContext as Application
+        )
+    )
+    val transactionsViewModel: TransactionsViewModel = viewModel(
+        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
+            context.applicationContext as Application
+        )
+    )
+    
+    val userFirstName by dashboardViewModel.userFirstName.collectAsState()
+    val userFullName by dashboardViewModel.userFullName.collectAsState()
+    val transactionsState by transactionsViewModel.transactionsState.collectAsState()
+    val resumenState by dashboardViewModel.resumenState.collectAsState()
+    
+    val greetingName = when {
+        userFullName.isNotBlank() -> userFullName
+        userFirstName.isNotBlank() -> userFirstName
+        else -> "Usuario"
+    }
     var selectedItem by remember { mutableIntStateOf(0) }
     
-    // Sample data
-    val sampleTransactions = remember {
-        listOf(
-            Transaction(
-                id = "1",
-                name = "Supermercado",
-                category = Categories.food,
-                amount = 125.50,
-                date = "15 Nov",
-                type = TransactionType.EXPENSE
-            ),
-            Transaction(
-                id = "2",
-                name = "Salario",
-                category = Categories.salary,
-                amount = 2500.00,
-                date = "1 Nov",
-                type = TransactionType.INCOME
-            ),
-            Transaction(
-                id = "3",
-                name = "Uber",
-                category = Categories.transport,
-                amount = 15.75,
-                date = "14 Nov",
-                type = TransactionType.EXPENSE
-            )
-        )
+    // Cargar resumen y transacciones al iniciar
+    LaunchedEffect(Unit) {
+        dashboardViewModel.loadResumen()
+        transactionsViewModel.loadTransactions()
     }
+    
+    // Recargar cuando se vuelve de AddTransactionScreen
+    val refreshFlow = navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow("refreshTransactions", false)
+    val shouldRefresh by refreshFlow?.collectAsState() ?: remember { mutableStateOf(false) }
+
+    LaunchedEffect(shouldRefresh) {
+        if (shouldRefresh) {
+            dashboardViewModel.loadResumen()
+            transactionsViewModel.loadTransactions()
+            navController.currentBackStackEntry
+                ?.savedStateHandle
+                ?.set("refreshTransactions", false)
+        }
+    }
+    
+    // Usar resumen de la API si está disponible, de lo contrario calcular desde transacciones
+    val resumen = when (val state = resumenState) {
+        is com.example.moneyflow.ui.viewmodel.ResumenState.Success -> state.resumen
+        else -> null
+    }
+    
+    val ingresos = resumen?.totalIngresos?.toDouble() ?: run {
+        val transactions = when (val state = transactionsState) {
+            is TransactionsState.Success -> state.transactions
+            else -> emptyList()
+        }
+        transactions.filter { it.tipo.lowercase() == "ingreso" }.sumOf { it.monto.toDouble() }
+    }
+    
+    val gastos = resumen?.totalGastos?.toDouble() ?: run {
+        val transactions = when (val state = transactionsState) {
+            is TransactionsState.Success -> state.transactions
+            else -> emptyList()
+        }
+        transactions.filter { it.tipo.lowercase() == "gasto" }.sumOf { it.monto.toDouble() }
+    }
+    
+    val balanceTotal = resumen?.balance?.toDouble() ?: (ingresos - gastos)
+    
+    // Obtener últimas 3 transacciones
+    val transactions = when (val state = transactionsState) {
+        is TransactionsState.Success -> state.transactions
+        else -> emptyList()
+    }
+    
+    val recentTransactions = transactions
+        .sortedByDescending { it.fecha }
+        .take(3)
+        .map { it.toTransaction() }
 
     Scaffold(
         bottomBar = {
@@ -216,11 +274,11 @@ fun DashboardScreen(navController: NavController) {
                             color = Color(0xFFFFEDD5)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Carlos Mendoza",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White
-                        )
+                          Text(
+                              text = greetingName,
+                              style = MaterialTheme.typography.titleLarge,
+                              color = Color.White
+                          )
                     }
 
                     Surface(
@@ -271,13 +329,13 @@ fun DashboardScreen(navController: NavController) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        Text(
-                            text = "$8,750.00",
-                            style = MaterialTheme.typography.displaySmall.copy(
-                                fontSize = 36.sp
-                            ),
-                            color = Color.White
-                        )
+                          Text(
+                              text = CurrencyFormatter.formatCOP(balanceTotal),
+                              style = MaterialTheme.typography.displaySmall.copy(
+                                  fontSize = 36.sp
+                              ),
+                              color = Color.White
+                          )
 
                         // Badge de porcentaje
                         Surface(
@@ -349,11 +407,11 @@ fun DashboardScreen(navController: NavController) {
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "$4,250",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color.White
-                                )
+                                  Text(
+                                      text = CurrencyFormatter.formatCOP(ingresos),
+                                      style = MaterialTheme.typography.titleLarge,
+                                      color = Color.White
+                                  )
                             }
                         }
 
@@ -395,11 +453,11 @@ fun DashboardScreen(navController: NavController) {
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "$1,890",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color.White
-                                )
+                                  Text(
+                                      text = CurrencyFormatter.formatCOP(gastos),
+                                      style = MaterialTheme.typography.titleLarge,
+                                      color = Color.White
+                                  )
                             }
                         }
                     }
@@ -430,19 +488,78 @@ fun DashboardScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(sampleTransactions) { transaction ->
-                        TransactionCard(
-                            transaction = transaction,
-                            onClick = {
-                                navController.navigate("transaction_detail/${transaction.id}")
-                            }
-                        )
-                    }
-                }
+                  if (recentTransactions.isEmpty()) {
+                      Text(
+                          text = "No hay transacciones recientes",
+                          style = MaterialTheme.typography.bodyMedium,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant
+                      )
+                  } else {
+                      LazyColumn(
+                          verticalArrangement = Arrangement.spacedBy(12.dp)
+                      ) {
+                          items(recentTransactions) { transaction ->
+                              TransactionCard(
+                                  transaction = transaction,
+                                  onClick = {
+                                      navController.navigate("transaction_detail/${transaction.id}")
+                                  }
+                              )
+                          }
+                      }
+                  }
             }
         }
     }
+}
+
+// Función de extensión para convertir TransactionResponse a Transaction
+private fun TransactionResponse.toTransaction(): Transaction {
+    val tipo = if (this.tipo.lowercase() == "ingreso") TransactionType.INCOME else TransactionType.EXPENSE
+    
+    // Parsear fecha ISO 8601 a formato corto
+    val fechaFormateada = try {
+        val instant = java.time.Instant.parse(this.fecha)
+        val localDate = instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale("es", "CO"))
+        localDate.format(formatter)
+    } catch (e: Exception) {
+        "Fecha inválida"
+    }
+    
+    // Crear Category desde los datos de la respuesta
+    val categoryColor = when (categoriaNombre.lowercase()) {
+        "comida" -> com.example.moneyflow.theme.CategoryFood
+        "transporte" -> com.example.moneyflow.theme.CategoryTransport
+        "entretenimiento" -> com.example.moneyflow.theme.CategoryEntertainment
+        "salud" -> com.example.moneyflow.theme.CategoryHealth
+        "educación" -> com.example.moneyflow.theme.CategoryEducation
+        "compras" -> com.example.moneyflow.theme.CategoryShopping
+        else -> if (tipo == TransactionType.INCOME) IncomeColor else com.example.moneyflow.theme.CategoryFood
+    }
+    
+    val categoryBackground = if (categoriaTipo.lowercase() == "ingresos") {
+        com.example.moneyflow.theme.IncomeBackground
+    } else {
+        com.example.moneyflow.theme.ExpenseBackground
+    }
+    
+    val category = com.example.moneyflow.model.Category(
+        id = categoriaId,
+        name = categoriaNombre,
+        icon = categoriaIcono,
+        color = categoryColor,
+        backgroundColor = categoryBackground
+    )
+    
+    return Transaction(
+        id = this.id,
+        name = this.descripcion ?: categoriaNombre,
+        category = category,
+        amount = this.monto.toDouble(),
+        date = fechaFormateada,
+        description = this.descripcion,
+        type = tipo,
+        paymentMethod = null
+    )
 }

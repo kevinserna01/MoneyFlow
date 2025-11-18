@@ -1,6 +1,8 @@
 package com.example.moneyflow.data.repository
 
 import com.example.moneyflow.data.api.ApiClient
+import com.example.moneyflow.data.models.CambiarContraseñaRequest
+import com.example.moneyflow.data.models.ContrasenaActualResponse
 import com.example.moneyflow.data.models.CreateUsuarioRequest
 import com.example.moneyflow.data.models.LoginRequest
 import com.example.moneyflow.data.models.UpdateUsuarioRequest
@@ -70,6 +72,19 @@ class UsuarioRepository {
         }
     }
     
+    suspend fun getContrasenaActual(id: String): Result<ContrasenaActualResponse> {
+        return try {
+            val response = api.getContrasenaActual(id)
+            if (response.success && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.error ?: "Error desconocido"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
     suspend fun updateUsuario(
         id: String,
         nombre: String? = null,
@@ -81,6 +96,26 @@ class UsuarioRepository {
             val response = api.updateUsuario(
                 id,
                 UpdateUsuarioRequest(nombre, telefono, correo, contraseña)
+            )
+            if (response.success && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.error ?: "Error desconocido"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun cambiarContraseña(
+        id: String,
+        nuevaContraseña: String,
+        confirmarContraseña: String
+    ): Result<Usuario> {
+        return try {
+            val response = api.cambiarContraseña(
+                id,
+                CambiarContraseñaRequest(nuevaContraseña, confirmarContraseña)
             )
             if (response.success && response.data != null) {
                 Result.success(response.data)

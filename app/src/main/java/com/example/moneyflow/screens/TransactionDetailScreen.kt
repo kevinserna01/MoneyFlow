@@ -1,5 +1,6 @@
 package com.example.moneyflow.screens
 
+import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -27,8 +28,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,34 +46,76 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.moneyflow.model.Categories
-import com.example.moneyflow.model.Transaction
+import com.example.moneyflow.data.models.TransactionResponse
 import com.example.moneyflow.model.TransactionType
 import com.example.moneyflow.theme.ExpenseColor
+import com.example.moneyflow.theme.IncomeColor
+import com.example.moneyflow.ui.viewmodel.TransactionDetailState
+import com.example.moneyflow.ui.viewmodel.TransactionDetailViewModel
+import com.example.moneyflow.utils.CurrencyFormatter
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionDetailScreen(navController: NavController, transactionId: String?) {
-    // Sample transaction data
-    val transaction = remember {
-        Transaction(
-            id = transactionId ?: "1",
-            name = "Supermercado",
-            category = Categories.food,
-            amount = 125.00,
-            date = "15 de Noviembre, 2025",
-            description = "Compra mensual de víveres y productos",
-            type = TransactionType.EXPENSE,
-            paymentMethod = "Tarjeta de Crédito"
+    val context = LocalContext.current
+    val viewModel: TransactionDetailViewModel = viewModel(
+        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
+            context.applicationContext as Application
         )
+    )
+    val transactionState by viewModel.transactionState.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
+    
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    
+    // Cargar transacción al iniciar
+    LaunchedEffect(transactionId) {
+        if (transactionId != null) {
+            viewModel.loadTransaction(transactionId)
+        }
+    }
+    
+    // Manejar eliminación exitosa
+    LaunchedEffect(updateState) {
+        when (updateState) {
+            is com.example.moneyflow.ui.viewmodel.UpdateTransactionState.Deleted -> {
+                navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.set("refreshTransactions", true)
+                // Refrescar categorías siempre porque:
+                // - Ingresos: resta el monto del presupuesto de la categoría de ingreso
+                // - Gastos: suma de vuelta el monto al presupuesto de las categorías de ingresos
+                //   (resta directa, empezando por la categoría con mayor presupuesto)
+                navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.set("refreshCategories", true)
+                navController.popBackStack()
+            }
+            else -> {}
+        }
+    }
+    
+    val transaction = when (val state = transactionState) {
+        is TransactionDetailState.Success -> state.transaction
+        else -> null
     }
 
     Scaffold(
@@ -90,12 +135,88 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(paddingValues)
-        ) {
+        when (val state = transactionState) {
+            is TransactionDetailState.Idle -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            is TransactionDetailState.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            is TransactionDetailState.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Error al cargar transacción",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = state.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            is TransactionDetailState.Success -> {
+                val transaction = state.transaction
+                
+                if (showDeleteDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteDialog = false },
+                        title = { Text("Eliminar transacción") },
+                        text = {
+                            Text(
+                                text = "¿Seguro que deseas eliminar esta transacción? Esta acción no se puede deshacer.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    viewModel.deleteTransaction(transaction.id)
+                                    showDeleteDialog = false
+                                }
+                            ) {
+                                Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeleteDialog = false }) {
+                                Text("Cancelar")
+                            }
+                        }
+                    )
+                }
+                
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(paddingValues)
+                ) {
             // Main Detail Card
             Card(
                 modifier = Modifier
@@ -113,31 +234,36 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
                     Surface(
                         modifier = Modifier.size(80.dp),
                         shape = CircleShape,
-                        color = Color(0xFFFFEDD5)
+                        color = if (transaction.tipo.lowercase() == "ingreso") 
+                            Color(0xFFD1FAE5) 
+                        else 
+                            Color(0xFFFFEDD5)
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = transaction.category.icon, style = MaterialTheme.typography.headlineLarge)
+                            Text(text = transaction.categoriaIcono, style = MaterialTheme.typography.headlineLarge)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = transaction.name,
+                        text = transaction.descripcion ?: transaction.categoriaNombre,
                         style = MaterialTheme.typography.headlineMedium
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    val formattedAmount = CurrencyFormatter.formatCOP(transaction.monto.toDouble())
+                    val isIncome = transaction.tipo.lowercase() == "ingreso"
                     Text(
-                        text = "-$${String.format("%.2f", transaction.amount)}",
+                        text = if (isIncome) "+$formattedAmount" else "-$formattedAmount",
                         style = MaterialTheme.typography.displaySmall.copy(
                             fontSize = 36.sp
                         ),
-                        color = ExpenseColor
+                        color = if (isIncome) IncomeColor else ExpenseColor
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -149,10 +275,10 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
                     // Detail Items
                     DetailItem(
                         icon = Icons.Default.Category,
-                        iconColor = ExpenseColor,
-                        iconBackground = Color(0xFFFFEDD5),
+                        iconColor = if (isIncome) IncomeColor else ExpenseColor,
+                        iconBackground = if (isIncome) Color(0xFFD1FAE5) else Color(0xFFFFEDD5),
                         label = "Categoría",
-                        value = transaction.category.name
+                        value = transaction.categoriaNombre
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -162,7 +288,7 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
                         iconColor = Color(0xFF3B82F6),
                         iconBackground = Color(0xFFDBEAFE),
                         label = "Fecha",
-                        value = transaction.date
+                        value = formatTransactionDate(transaction.fecha)
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -172,7 +298,7 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
                         iconColor = Color(0xFFA855F7),
                         iconBackground = Color(0xFFF3E8FF),
                         label = "Descripción",
-                        value = transaction.description ?: "Sin descripción",
+                        value = transaction.descripcion ?: "Sin descripción",
                         multiline = true
                     )
 
@@ -227,11 +353,11 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
 
                         Column {
                             Text(
-                                text = transaction.paymentMethod ?: "Efectivo",
+                                text = "Efectivo",
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Text(
-                                text = "•••• 4532",
+                                text = "Pago realizado",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -267,7 +393,7 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "TXN-2025-11-15-0042",
+                            text = transaction.id,
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -288,7 +414,9 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedButton(
-                    onClick = { /* Edit */ },
+                    onClick = { 
+                        navController.navigate("edit_transaction/${transaction.id}")
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .height(56.dp),
@@ -304,7 +432,7 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
                 }
 
                 OutlinedButton(
-                    onClick = { /* Delete */ },
+                    onClick = { showDeleteDialog = true },
                     modifier = Modifier
                         .weight(1f)
                         .height(56.dp),
@@ -323,7 +451,20 @@ fun TransactionDetailScreen(navController: NavController, transactionId: String?
                     Text("Eliminar")
                 }
             }
+                }
+            }
         }
+    }
+}
+
+private fun formatTransactionDate(fechaISO: String): String {
+    return try {
+        val instant = Instant.parse(fechaISO)
+        val localDate = instant.atZone(ZoneId.systemDefault()).toLocalDate()
+        val formatter = DateTimeFormatter.ofPattern("d 'de' MMMM, yyyy", java.util.Locale("es", "CO"))
+        localDate.format(formatter)
+    } catch (e: Exception) {
+        fechaISO
     }
 }
 
