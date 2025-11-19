@@ -1,9 +1,14 @@
 package com.example.moneyflow.data.api
 
 object ApiConfig {
-    // TODO: Reemplazar con la URL real de tu servidor
-    // Para emulador Android: http://10.0.2.2:4000/api/
-    // Para dispositivo físico en la misma red: http://[IP_DEL_SERVIDOR]:4000/api/
-    // Ejemplo: http://192.168.1.100:4000/api/
-    const val BASE_URL = "http://10.0.2.2:4000/api/"
+    // Cambiar a false para usar el servidor de producción
+    // Cambiar a true para usar el servidor local
+    private const val USE_LOCAL_SERVER = false
+    
+    // URLs de los servidores
+    private const val LOCAL_URL = "http://10.0.2.2:4000/api/"
+    private const val PRODUCTION_URL = "https://moneyflow-backend-taupe.vercel.app/api/"
+    
+    // URL base seleccionada según la configuración
+    val BASE_URL = if (USE_LOCAL_SERVER) LOCAL_URL else PRODUCTION_URL
 }

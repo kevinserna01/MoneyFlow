@@ -9,7 +9,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private const val BASE_URL = ApiConfig.BASE_URL
+    private val BASE_URL = ApiConfig.BASE_URL
     
     private var token: String? = null
     

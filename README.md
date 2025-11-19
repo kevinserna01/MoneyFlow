@@ -89,21 +89,30 @@ Edita el archivo `app/src/main/java/com/example/moneyflow/data/api/ApiConfig.kt`
 
 ```kotlin
 object ApiConfig {
-    // Para emulador Android:
-    const val BASE_URL = "http://10.0.2.2:4000/api/"
+    // Cambiar a false para usar el servidor de producción
+    // Cambiar a true para usar el servidor local
+    private const val USE_LOCAL_SERVER = false
     
-    // Para dispositivo físico en la misma red:
-    // const val BASE_URL = "http://192.168.1.100:4000/api/"
+    // URLs de los servidores
+    private const val LOCAL_URL = "http://10.0.2.2:4000/api/"
+    private const val PRODUCTION_URL = "https://moneyflow-backend-taupe.vercel.app/api/"
     
-    // Para servidor en producción:
-    // const val BASE_URL = "https://api.moneyflow.com/api/"
+    // URL base seleccionada según la configuración
+    const val BASE_URL = if (USE_LOCAL_SERVER) LOCAL_URL else PRODUCTION_URL
 }
 ```
 
+**Configuración de entornos:**
+- **Servidor Local** (`USE_LOCAL_SERVER = true`): 
+  - Para emulador Android: `http://10.0.2.2:4000/api/`
+  - Para dispositivo físico en la misma red: Cambia `LOCAL_URL` a `http://[IP_DEL_SERVIDOR]:4000/api/`
+- **Servidor de Producción** (`USE_LOCAL_SERVER = false`):
+  - URL de producción: `https://moneyflow-backend-taupe.vercel.app/api/`
+
 **Notas importantes:**
-- **Emulador Android**: Usa `10.0.2.2` para referenciar `localhost` de tu máquina
-- **Dispositivo físico**: Usa la IP local de tu servidor en la misma red WiFi
-- **Producción**: Usa HTTPS con un dominio válido
+- Cambia el valor de `USE_LOCAL_SERVER` según el entorno que quieras usar
+- El servidor local requiere que el backend esté corriendo en tu máquina
+- El servidor de producción está disponible en Vercel
 
 ### Paso 6: Verificar Permisos
 
