@@ -1,3 +1,8 @@
+
+
+
+
+
 # 💰 MoneyFlow
 
 Aplicación móvil Android para la gestión de finanzas personales desarrollada con Kotlin y Jetpack Compose.
@@ -5,6 +10,11 @@ Aplicación móvil Android para la gestión de finanzas personales desarrollada 
 ## 📋 Descripción
 
 MoneyFlow es una aplicación móvil que permite a los usuarios gestionar sus finanzas personales de manera eficiente. La aplicación permite registrar ingresos y gastos, categorizar transacciones, visualizar estadísticas y mantener un control completo sobre el flujo de dinero.
+
+#Integrantes
+- Kevin Fernando Serna Goyes
+- Johan Stiven Sinisterra Campaz
+- Juan David Quintero Pimentel
 
 ## 🛠️ Tecnologías Utilizadas
 
